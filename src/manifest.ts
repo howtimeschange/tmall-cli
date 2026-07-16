@@ -127,6 +127,34 @@ export const MANIFEST: ManifestEntry[] = [
   ...readCommand('quick.agreement', 'Read Quick agreement state without signing', 'mtop-read', ['scene', 'hasAgree', 'subAccount']),
   ...readCommand('quick.item-pool', 'Read Quick item pool details from explicit or recommended item ids', 'mtop-read', ['itemId', 'title', 'status', 'keys']),
   ...readCommand('quick.offline-results', 'Read Quick offline results without submitting generation jobs', 'mtop-read', ['sceneCode', 'taskId', 'status', 'resultKeys']),
+  ...readCommand('material-test.items', 'Read QianNiu item search for material-test item id confirmation', 'mtop-read', ['itemId', 'title', 'outerId', 'status']),
+  ...readCommand('material-test.tasks', 'Read material-test task list without creating or publishing tasks', 'mtop-read', ['itemId', 'taskId', 'status', 'channel', 'materialCount']),
+  ...readCommand('material-test.data', 'Read material-test data download API without changing tasks', 'mtop-read', ['itemId', 'taskId', 'statisticType', 'materialId', 'searchCtr']),
+  {
+    name: 'material-test.plan-create',
+    description: 'Build blocked payload plan for material-test create/add/online/upload operations without executing',
+    access: 'read',
+    browser: false,
+    strategy: 'local',
+    columns: ['access', 'execution', 'itemId', 'source', 'materialCount']
+  },
+  {
+    name: 'reviews.parse-links',
+    description: 'Parse Tmall item links locally into itemId/skuId rows',
+    access: 'read',
+    browser: false,
+    strategy: 'local',
+    columns: ['itemId', 'skuId', 'url']
+  },
+  ...readCommand('reviews.list', 'Read buyer review rows from mtop.taobao.rate.detaillist.get with bounded pagination', 'mtop-read', ['itemId', 'page', 'reviewId', 'buyerNick', 'content']),
+  {
+    name: 'member.urls',
+    description: 'Normalize competitor member-center sellerId links locally without opening pages',
+    access: 'read',
+    browser: false,
+    strategy: 'local',
+    columns: ['shopName', 'sellerId', 'url', 'status']
+  },
   ...readCommand('dmp.snapshot', 'Read visible DMP page snapshot', 'cdp-dom-state', ['title', 'href', 'textHead']),
   ...readCommand('dmp.user', 'Read DMP login user and permission summary', 'page-get', ['siteName', 'serverDate', 'accountLevel', 'permissionCount']),
   ...readCommand('dmp.credits', 'Read DMP AI credit balance', 'page-get', ['balance', 'estimatedDays', 'totalConsumption']),
@@ -140,7 +168,17 @@ export const MANIFEST: ManifestEntry[] = [
   ...readCommand('dmp.brand-apply', 'Read DMP brand-apply status summary', 'page-get', ['dataType', 'dataKeys', 'listCount']),
   ...readCommand('dmp.databank-deeplink', 'Read DMP databank deeplink summary', 'page-get', ['dataType', 'dataKeys', 'listCount']),
   ...readCommand('dmp.deeplink-report-tasks', 'Read DMP deeplink report tasks', 'page-get', ['id', 'name', 'status', 'keys']),
-  ...readCommand('dmp.waterprint', 'Read DMP watermark config summary', 'page-get', ['dataType', 'dataKeys'])
+  ...readCommand('dmp.waterprint', 'Read DMP watermark config summary', 'page-get', ['dataType', 'dataKeys']),
+  ...readCommand('dmp.compete-shops', 'Resolve DMP competition shop tokens through read-only gateway APIs', 'page-get', ['shopName', 'resolvedName', 'tokenPresent', 'status']),
+  ...readCommand('dmp.compete-paid-probe', 'Probe DMP competition paid-analysis read APIs and summarize endpoint health', 'page-get', ['endpoint', 'status', 'competitorCount', 'dataKeys']),
+  {
+    name: 'dmp.compete-paid-plan',
+    description: 'Build local payload plan for DMP competition paid-analysis read APIs',
+    access: 'read',
+    browser: false,
+    strategy: 'local',
+    columns: ['path', 'method', 'origin', 'execution']
+  }
 ];
 
 export function getManifest(name: string): ManifestEntry | undefined {

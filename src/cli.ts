@@ -4,7 +4,11 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Command } from 'commander';
 import { DMP_TARGET, readDmpAdcComponents, readDmpBrandApply, readDmpCredits, readDmpDatabankDeeplink, readDmpDeeplinkReportTasks, readDmpLatestDay, readDmpPowerUser, readDmpReportNotice, readDmpSms, readDmpSmsCount, readDmpUser, readDmpWaterprint, readDmpWeeklyReports } from './adapters/dmp.js';
+import { buildDmpCompetePaidPlan, readDmpCompetePaidProbe, readDmpCompeteShops } from './adapters/dmp-compete.js';
+import { buildMaterialCreatePlan, MATERIAL_TEST_TARGET, readMaterialData, readMaterialItems, readMaterialTasks } from './adapters/material-test.js';
+import { normalizeMemberUrls } from './adapters/member.js';
 import { QUICK_VIDEO_TARGET, readAgreement, readCommercializeCheck, readDesktopDownload, readDigitalHumans, readItemPool, readItemSearch, readLayoutMenu, readOfflineResults, readOneConfigure, readPreference, readQuickPoints, readQuickSellerCategory, readRecommendItems, readScriptCategories, readSignStatus, readSwitches, readTemplateCategories, readTemplates } from './adapters/quick-video.js';
+import { parseReviewLinks, readReviews, REVIEWS_TARGET } from './adapters/reviews.js';
 import { SELLER_HOME_TARGET, readActivities, readCalendar, readDiagnoseOverview, readFinanceHome, readHomeAdvertisements, readHomeNumbers, readHomePopups, readHomeTodo, readNoticeAll, readRiskComponents, readSellerCard, readSellerInfoCards, readServiceStatus, readShopInfo, readShopTags, readSopTasks, readWarnInfo } from './adapters/seller-home.js';
 import { DEFAULT_CDP_URL, DEFAULT_HOME_URL, DEFAULT_TARGET_MATCH, listTargets, selectTarget, withTmallPage } from './cdp.js';
 import { AuthRequiredError, TmallCliError, toTmallError } from './errors.js';
@@ -304,6 +308,121 @@ export function createCli(): Command {
       write(await readOfflineResults({ cdpUrl: opts.cdpUrl, target: opts.target, sceneCode: cmdOpts.sceneCode }), opts);
     });
 
+  const material = program.command('material-test').description('天猫素材测图真实只读接口与操作计划');
+  material.command('items')
+    .description('读取千牛商品搜索结果，用于确认测图 itemId')
+    .option('-k, --keyword <text>', '商品标题/ID/编码关键词', '')
+    .option('--page-num <n>', 'page number', '1')
+    .option('--page-size <n>', 'page size', '24')
+    .action(async (cmdOpts) => {
+      const opts = { ...globals(), target: MATERIAL_TEST_TARGET };
+      write(await readMaterialItems({
+        cdpUrl: opts.cdpUrl,
+        target: opts.target,
+        keyword: cmdOpts.keyword,
+        pageNum: Number(cmdOpts.pageNum),
+        pageSize: normalizeLimit(cmdOpts.pageSize, 24, 100)
+      }), opts);
+    });
+  material.command('tasks')
+    .description('读取素材测图任务列表，不创建/上线任务')
+    .option('--item-id <id>', 'item id or text containing item id', '')
+    .option('--status <status>', '全部/未测试/测试中/已结束/已完成/已暂停 or raw status', '')
+    .option('--channel <channel>', 'test channel', 'common_search')
+    .option('--page-num <n>', 'page number', '1')
+    .option('--page-size <n>', 'page size', '20')
+    .action(async (cmdOpts) => {
+      const opts = { ...globals(), target: MATERIAL_TEST_TARGET };
+      write(await readMaterialTasks({
+        cdpUrl: opts.cdpUrl,
+        target: opts.target,
+        itemId: cmdOpts.itemId,
+        testStatus: cmdOpts.status,
+        testChannel: cmdOpts.channel,
+        pageNum: Number(cmdOpts.pageNum),
+        pageSize: normalizeLimit(cmdOpts.pageSize, 20, 100)
+      }), opts);
+    });
+  material.command('data')
+    .description('读取素材测图数据下载接口，不创建/修改任务')
+    .requiredOption('--item-ids <ids>', 'comma/newline-separated item ids')
+    .option('--statistic-type <type>', 'ACCUMULATE_30_DAYS or DAILY', 'ACCUMULATE_30_DAYS')
+    .option('--start-date <yyyymmdd>', 'start date, defaults to last 30 days')
+    .option('--end-date <yyyymmdd>', 'end date, defaults to today')
+    .option('-l, --limit <n>', 'maximum rows', '100')
+    .action(async (cmdOpts) => {
+      const opts = { ...globals(), target: MATERIAL_TEST_TARGET };
+      write(await readMaterialData({
+        cdpUrl: opts.cdpUrl,
+        target: opts.target,
+        itemIds: splitList(cmdOpts.itemIds),
+        statisticType: cmdOpts.statisticType,
+        startDate: cmdOpts.startDate,
+        endDate: cmdOpts.endDate,
+        limit: normalizeLimit(cmdOpts.limit, 100, 1000)
+      }), opts);
+    });
+  material.command('plan-create')
+    .description('生成创建/加图/上线/上传 payload 计划；只输出 blocked，不执行')
+    .requiredOption('--item-id <id>', 'item id')
+    .option('--material-urls <urls>', 'comma/newline-separated pic URLs')
+    .option('--experiment-task-id <id>', 'existing task id for batch.add/online plan')
+    .option('--source <source>', 'test source', 'common_search')
+    .option('--size <ratio>', 'material ratio', '3:4')
+    .option('--file-name <name>', 'sample upload file name', 'image.jpg')
+    .action((cmdOpts) => {
+      const opts = globals();
+      write(buildMaterialCreatePlan({
+        itemId: cmdOpts.itemId,
+        materialUrls: splitList(cmdOpts.materialUrls),
+        experimentTaskId: cmdOpts.experimentTaskId,
+        source: cmdOpts.source,
+        size: cmdOpts.size,
+        fileName: cmdOpts.fileName
+      }), opts);
+    });
+
+  const reviews = program.command('reviews').description('天猫买家评价读取和商品链接解析');
+  reviews.command('parse-links')
+    .description('本地解析商品链接/ID，不访问页面')
+    .argument('[input...]', 'links or ids')
+    .action((input) => {
+      const opts = globals();
+      write(parseReviewLinks((input || []).join('\n')), opts);
+    });
+  reviews.command('list')
+    .description('读取买家评价列表；默认 1 页，不提交任何操作')
+    .option('--item-id <id>', 'item id')
+    .option('--item-url <url>', 'detail item URL')
+    .option('--sku-id <id>', 'sku id')
+    .option('--page-num <n>', 'start page', '1')
+    .option('--page-size <n>', 'page size', '20')
+    .option('--max-pages <n>', 'maximum pages', '1')
+    .option('-l, --limit <n>', 'maximum rows', '100')
+    .action(async (cmdOpts) => {
+      const opts = { ...globals(), target: REVIEWS_TARGET };
+      write(await readReviews({
+        cdpUrl: opts.cdpUrl,
+        target: opts.target,
+        itemId: cmdOpts.itemId,
+        itemUrl: cmdOpts.itemUrl,
+        skuId: cmdOpts.skuId,
+        pageNum: Number(cmdOpts.pageNum),
+        pageSize: normalizeLimit(cmdOpts.pageSize, 20, 100),
+        maxPages: normalizeLimit(cmdOpts.maxPages, 1, 20),
+        limit: normalizeLimit(cmdOpts.limit, 100, 1000)
+      }), opts);
+    });
+
+  const member = program.command('member').description('竞品会员中心本地 URL 标准化');
+  member.command('urls')
+    .description('根据 sellerId 或会员中心链接生成标准 URL；本地计算，不打开页面')
+    .argument('[input...]', 'seller ids, member URLs, or newline text')
+    .action((input) => {
+      const opts = globals();
+      write(normalizeMemberUrls((input || []).join('\n')), opts);
+    });
+
   const dmp = program.command('dmp').description('达摩盘真实只读页面接口');
   dmp.command('snapshot').description('读取达摩盘页面可见快照').action(async () => {
     const opts = { ...globals(), target: DMP_TARGET };
@@ -373,6 +492,53 @@ export function createCli(): Command {
     const opts = { ...globals(), target: DMP_TARGET };
     write(await readDmpWaterprint(opts), opts);
   });
+  dmp.command('compete-shops')
+    .description('解析竞争态势分析店铺 token；只调用 DMP 查询接口')
+    .option('--shop-list <text>', 'newline shop list, optional position after whitespace')
+    .action(async (cmdOpts) => {
+      const opts = { ...globals(), target: DMP_TARGET };
+      write(await readDmpCompeteShops({
+        cdpUrl: opts.cdpUrl,
+        target: opts.target,
+        shopList: cmdOpts.shopList
+      }), opts);
+    });
+  dmp.command('compete-paid-probe')
+    .description('探测竞品付费分析只读接口；输出接口状态/字段概要，不做投放')
+    .option('--shop-list <text>', 'newline shop list, optional position after whitespace')
+    .option('--begin-date <yyyy-mm-dd>', 'analysis begin date')
+    .option('--end-date <yyyy-mm-dd>', 'analysis end date')
+    .option('--peer-begin-date <yyyy-mm-dd>', 'comparison begin date')
+    .option('--peer-end-date <yyyy-mm-dd>', 'comparison end date')
+    .option('--max-competitors <n>', 'maximum competitors for probe', '3')
+    .action(async (cmdOpts) => {
+      const opts = { ...globals(), target: DMP_TARGET };
+      write(await readDmpCompetePaidProbe({
+        cdpUrl: opts.cdpUrl,
+        target: opts.target,
+        shopList: cmdOpts.shopList,
+        beginDate: cmdOpts.beginDate,
+        endDate: cmdOpts.endDate,
+        peerBeginDate: cmdOpts.peerBeginDate,
+        peerEndDate: cmdOpts.peerEndDate,
+        maxCompetitors: normalizeLimit(cmdOpts.maxCompetitors, 3, 10)
+      }), opts);
+    });
+  dmp.command('compete-paid-plan')
+    .description('输出竞品付费分析接口 payload 计划；本地生成，不请求页面')
+    .option('--begin-date <yyyy-mm-dd>', 'analysis begin date')
+    .option('--end-date <yyyy-mm-dd>', 'analysis end date')
+    .option('--peer-begin-date <yyyy-mm-dd>', 'comparison begin date')
+    .option('--peer-end-date <yyyy-mm-dd>', 'comparison end date')
+    .action((cmdOpts) => {
+      const opts = globals();
+      write(buildDmpCompetePaidPlan({
+        beginDate: cmdOpts.beginDate,
+        endDate: cmdOpts.endDate,
+        peerBeginDate: cmdOpts.peerBeginDate,
+        peerEndDate: cmdOpts.peerEndDate
+      }), opts);
+    });
 
   const ops = program.command('ops').description('操作类接口图谱：只记录调用方式，不执行线上动作');
   ops.command('list')
@@ -627,6 +793,14 @@ function normalizeLimit(value: unknown, defaultValue: number, maxValue: number):
   if (!Number.isInteger(n) || n <= 0) throw new TmallCliError('ARGUMENT', `limit must be a positive integer <= ${maxValue}`, 2);
   if (n > maxValue) throw new TmallCliError('ARGUMENT', `limit must be <= ${maxValue}`, 2);
   return n;
+}
+
+function splitList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean);
+  return String(value ?? '')
+    .split(/[\n\r,，、;；]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function today(): string {

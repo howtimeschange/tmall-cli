@@ -23,6 +23,17 @@ npm run dev -- menu summary -f table
 npm run dev -- menu list --top 商品 --leaves-only -f table
 npm run dev -- endpoints apis -f table
 npm run dev -- recon export --output-dir docs/recon -f json
+
+# 从 Crawshrimp 天猫运营助手沉淀出的功能域
+npm run dev -- material-test items --keyword 1060862679580 -f json
+npm run dev -- material-test tasks --item-id 1060862679580 -f json
+npm run dev -- material-test data --item-ids 1060862679580 -f json
+npm run dev -- material-test plan-create --item-id 1060862679580 --material-urls //img.alicdn.com/a.jpg -f json
+npm run dev -- reviews parse-links 'https://detail.tmall.com/item.htm?id=1060862679580' -f json
+npm run dev -- reviews list --item-id 1060862679580 --page-size 2 --max-pages 1 -f json
+npm run dev -- member urls '左西旗舰店 123456789' -f json
+npm run dev -- dmp compete-shops -f json
+npm run dev -- dmp compete-paid-probe --max-competitors 1 -f json
 ```
 
 也可以直接运行构建产物：
@@ -65,6 +76,10 @@ Why not PAGE_FETCH / INTERCEPT yet:
 | `snapshot` | Return a bounded visible-page snapshot. |
 | `recon export` | Save local JSON + Markdown recon artifacts. |
 | `manifest list/get` | Machine-readable command surface. |
+| `material-test items/tasks/data/plan-create` | Query material-test item/task/data read APIs and build blocked create/upload plans. |
+| `reviews parse-links/list` | Parse item links locally and read buyer reviews with bounded pagination. |
+| `member urls` | Normalize member-center sellerId URLs locally; does not open pages. |
+| `dmp compete-shops/compete-paid-probe/compete-paid-plan` | Resolve DMP competition shops and probe paid-analysis read APIs. |
 
 ## Implemented Adapter Coverage
 
@@ -73,7 +88,29 @@ All adapter commands are read-only and were validated against the logged-in `922
 - `home *`: seller-center todo, seller cards, warnings, calendar, activities, diagnostics, shop info, notices, SOP tasks, finance reminders, number badges, risk widgets, ads, popups, shop tags, and service status.
 - `quick *`: Quick/生意管家 snapshot, points, seller category, templates, one-click configuration, preference readback, sign-in panel status, workspace menu, switches, digital humans, recommended items, all-item search, script categories, agreement status, desktop/commercialize summaries, item-pool probe, and offline result pull.
 - `dmp *`: DMP user, credits, messages, weekly reports, report notices, latest data day, ADC components, power user, brand apply, Databank deeplink, Deeplink report tasks, and watermark config.
+- `material-test *`: converted from Crawshrimp `tmall-material-test*.js`: QianNiu item search, material-test task search, material-test data download/readback, and local blocked plans for create/add/online/upload request shapes.
+- `reviews *`: converted from Crawshrimp `buyer-reviews.js`: item-link parsing plus `mtop.taobao.rate.detaillist.get` with `rate.tmall.com/list_detail_rate.htm` fallback.
+- `member *`: converted safe local normalization from Crawshrimp `tmall-compete-member-monitor.js`; automatic navigation/screenshot capture is intentionally not enabled in this CLI.
+- `dmp compete-*`: converted from Crawshrimp `tmall-compete-paid-monitor.js`: competition shop resolution and paid-analysis read API probing. The probe summarizes endpoint health/shape instead of exporting full workbook data.
 - `ops *`: operation-class request shape catalog and static source lookup for submit/save/delete/upload/apply-like APIs. These commands document how operation requests are shaped, but `execution` remains `blocked`.
+
+## Crawshrimp Conversion Notes
+
+Inspected source folder: `/Users/xingyicheng/Documents/crawshrimp/adapters/tmall-ops-assistant`.
+
+- `buyer-reviews.js` -> `reviews parse-links`, `reviews list`.
+- `tmall-material-test-data-export.js` and `tmall-material-test.js` -> `material-test items`, `material-test tasks`, `material-test data`, `material-test plan-create`.
+- `tmall-compete-paid-monitor.js` -> `dmp compete-shops`, `dmp compete-paid-probe`, `dmp compete-paid-plan`.
+- `tmall-compete-member-monitor.js` -> `member urls`.
+- `tmall-packaging-upload.js` and `tmall-ai-image-test-chain.js` contain upload/publish/create orchestration; this CLI only records request shapes through plan/source commands and does not execute those operations.
+
+Live smoke on the logged-in `9222` session:
+
+- `material-test tasks --item-id 1060862679580`: success, `total=0`.
+- `material-test items --keyword 1060862679580`: success, returned the Bala item title.
+- `material-test data --item-ids 1060862679580`: success, no detail rows for the sample item.
+- `dmp compete-shops`: success, resolved default competitor shops.
+- `dmp compete-paid-probe --max-competitors 1`: success across the paid-analysis read endpoints.
 
 ## Relationship To Existing CLIs
 

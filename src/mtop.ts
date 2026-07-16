@@ -8,8 +8,12 @@ export interface MtopSpec {
   key: string;
   api: string;
   version?: string;
+  appKey?: string;
   data?: Record<string, unknown>;
   method?: 'GET' | 'POST' | 'get' | 'post';
+  dataType?: 'json' | 'jsonp';
+  valueType?: 'original' | 'string';
+  preventFallback?: boolean;
   target: string;
   description: string;
   allowMutationName?: boolean;
@@ -53,10 +57,12 @@ export async function callMtop<T = unknown>(spec: MtopSpec, options: MtopCallOpt
     H5Request: true,
     api: spec.api,
     v: spec.version ?? '1.0',
+    ...(spec.appKey ? { appKey: spec.appKey } : {}),
     data: { ...(spec.data ?? {}), ...(options.data ?? {}) },
     type: spec.method ?? 'get',
-    dataType: 'json',
-    valueType: 'original',
+    dataType: spec.dataType ?? 'json',
+    valueType: spec.valueType ?? 'original',
+    ...(spec.preventFallback == null ? {} : { preventFallback: spec.preventFallback }),
     timeout: options.timeoutMs ?? 20_000
   };
 
@@ -102,10 +108,11 @@ function mtopExpression(payload: Record<string, unknown>): string {
       };
     };
     try {
-      if (!window.lib?.mtop?.request) {
-        return JSON.stringify({ ok: false, title: document.title, href: location.href, error: { message: 'window.lib.mtop.request 不可用' } });
+      const mtop = window.lib?.mtop || window.mtop;
+      if (!mtop?.request) {
+        return JSON.stringify({ ok: false, title: document.title, href: location.href, error: { message: 'window.lib.mtop/window.mtop.request 不可用' } });
       }
-      const response = await window.lib.mtop.request(payload);
+      const response = await mtop.request(payload);
       const unwrapped = unwrap(response);
       return JSON.stringify({
         ok: true,
