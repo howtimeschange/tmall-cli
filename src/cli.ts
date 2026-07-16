@@ -633,7 +633,7 @@ export function createCli(): Command {
         title: cmdOpts.title,
         description: cmdOpts.description,
         materialUrls: splitList(cmdOpts.materialUrls),
-        materialCount: normalizeLimit(cmdOpts.materialCount, 3, 9),
+        materialCount: Number(cmdOpts.materialCount),
         cropRatio: cmdOpts.cropRatio,
         influencer: cmdOpts.influencer
       }), opts);

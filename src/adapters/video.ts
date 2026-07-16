@@ -1,5 +1,5 @@
 import { callMtop, type MtopSpec } from '../mtop.js';
-import { asArray, asRecord, parseJsonObject, resultOf, text, type BrowserOptions } from './common.js';
+import { asArray, asRecord, normalizeTextList as normalizeList, parseJsonObject, resultOf, text, type BrowserOptions } from './common.js';
 import { QUICK_VIDEO_TARGET } from './quick-video.js';
 
 const DEFAULT_VIDEO_CATEGORY = '童装/婴儿装/亲子装';
@@ -90,7 +90,7 @@ export async function readVideoTemplateCatalog(options: BrowserOptions & { mainC
 export function buildSemirVideoMaterialPlan(options: SemirVideoMaterialPlanOptions = {}): Record<string, unknown> {
   const itemCodes = normalizeList(options.itemCodes);
   return {
-    access: 'local-write',
+    access: 'read',
     execution: 'not_executed_by_cli',
     note: '森马云盘素材准备会读取云盘并下载本地素材；天猫 CLI 只沉淀计划，不连接云盘下载。',
     sourceAdapter: 'bala-ai-video-assistant/semir-video-material-prepare.js',
@@ -371,12 +371,6 @@ function buildMaterialPlaceholders(urls: string[], count: number): Array<Record<
     url: `<uploaded image url ${index + 1}>`,
     source: 'local-upload-placeholder'
   }));
-}
-
-function normalizeList(value: unknown): string[] {
-  return (Array.isArray(value) ? value : String(value || '').split(/[\n\r,，、;；]+/))
-    .map((item) => text(item))
-    .filter(Boolean);
 }
 
 function normalizeItemId(value: unknown): string {

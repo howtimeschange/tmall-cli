@@ -122,6 +122,7 @@ describe('converted Crawshrimp adapter commands', () => {
       itemCodes: ['208326102205'],
       cloudPath: '巴拉营运BU-商品//巴拉货控/02 产品上新模块/2-2 巴拉产品上新/'
     });
+    expect(materialPlan.access).toBe('read');
     expect(materialPlan.execution).toBe('not_executed_by_cli');
 
     const imagePlan = buildBalaImagePlan({
@@ -151,6 +152,23 @@ describe('converted Crawshrimp adapter commands', () => {
     expect(JSON.stringify(workflow)).toContain('approved/rejected/retry/exported-to-video');
   });
 
+  it('normalizes object-based material lists without leaking object placeholders', () => {
+    const videoPlan = buildQnImg2VideoPlan({
+      itemId: '1060862679580',
+      imageUrls: [{ fullUrl: 'https://img.alicdn.com/object-a.jpg' }] as unknown as string[]
+    });
+    expect(videoPlan.materialCount).toBe(1);
+    expect(JSON.stringify(videoPlan)).toContain('https://img.alicdn.com/object-a.jpg');
+    expect(JSON.stringify(videoPlan)).not.toContain('[object Object]');
+
+    const imagePlan = buildBalaImagePlan({
+      operationType: 'outfit_swap',
+      garmentImages: [{ path: '/tmp/garment.jpg' }] as unknown as string[]
+    });
+    expect(imagePlan.validation).toBe('ok');
+    expect(JSON.stringify(imagePlan)).toContain('/tmp/garment.jpg');
+  });
+
   it('builds blocked MOP search-recommend and KOL img2video plans', () => {
     const publishPlan = buildMopSearchRecommendPlan({
       itemId: '1060862679580',
@@ -174,5 +192,22 @@ describe('converted Crawshrimp adapter commands', () => {
     expect(kolPlan.validation).toBe('ok');
     expect(JSON.stringify(kolPlan)).toContain('mtop.taobao.qn.copilot.image.generate.video.submit');
     expect(JSON.stringify(kolPlan)).toContain('mtop.tmall.sell.pc.manage.async');
+  });
+
+  it('reports invalid MOP search-recommend inputs instead of truncating or clamping them', () => {
+    const invalidPlan = buildMopSearchRecommendPlan({
+      itemId: '1060862679580',
+      title: '标'.repeat(31),
+      description: '内'.repeat(201),
+      materialUrls: Array.from({ length: 10 }, (_, index) => `https://img.alicdn.com/${index}.jpg`)
+    });
+    expect(String(invalidPlan.validation)).toContain('添加标题最多 30 字');
+    expect(String(invalidPlan.validation)).toContain('内容描述最多 200 字');
+    expect(String(invalidPlan.validation)).toContain('素材图片最多 9 张');
+    expect(invalidPlan.uploadPlan).toMatchObject({
+      inputMaterialCount: 10,
+      materialCount: 9,
+      ignoredMaterialCount: 1
+    });
   });
 });

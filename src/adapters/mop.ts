@@ -1,4 +1,4 @@
-import { text } from './common.js';
+import { normalizeTextList as normalizeList, text } from './common.js';
 import { buildQnImg2VideoPlan, readVideoTemplateCatalog, type QnImg2VideoPlanOptions } from './video.js';
 
 const DEFAULT_BIZ_CODE = 's_upload_feeds';
@@ -28,11 +28,12 @@ export const readMopVideoTemplateCatalog = readVideoTemplateCatalog;
 export function buildMopSearchRecommendPlan(options: MopSearchRecommendPlanOptions = {}): Record<string, unknown> {
   const itemId = normalizeItemId(options.itemId);
   const merchantCode = normalizeMerchantCode(options.merchantCode);
-  const title = truncateText(options.title, 30);
-  const description = truncateText(options.description, 200);
+  const title = text(options.title);
+  const description = text(options.description);
   const materialUrls = normalizeList(options.materialUrls);
-  const materialCount = materialUrls.length || positiveInt(options.materialCount, MIN_SEARCH_RECOMMEND_IMAGES, MAX_SEARCH_RECOMMEND_IMAGES);
+  const materialCount = materialUrls.length || intOrFallback(options.materialCount, MIN_SEARCH_RECOMMEND_IMAGES);
   const materials = buildMaterialRows(materialUrls, materialCount, normalizeCropRatio(options.cropRatio));
+  const ignoredMaterialCount = Math.max(0, materialCount - materials.length);
   return {
     access: 'blocked-write',
     execution: 'blocked',
@@ -83,7 +84,9 @@ export function buildMopSearchRecommendPlan(options: MopSearchRecommendPlanOptio
       execution: 'blocked',
       helper: 'window.$startFileUpload(dataUrl)',
       preprocessing: `center-crop ${normalizeCropRatio(options.cropRatio)}`,
+      inputMaterialCount: materialCount,
       materialCount: materials.length,
+      ignoredMaterialCount,
       reason: '本地图片上传会写入千牛素材空间'
     },
     publishRequest: {
@@ -170,7 +173,9 @@ function searchRecommendValidation(input: {
   const errors: string[] = [];
   if (!input.itemId && !input.merchantCode) errors.push('商品ID或商家编码必填');
   if (!input.title) errors.push('添加标题必填');
+  if (input.title.length > 30) errors.push('添加标题最多 30 字');
   if (!input.description) errors.push('内容描述必填');
+  if (input.description.length > 200) errors.push('内容描述最多 200 字');
   if (input.materialCount < MIN_SEARCH_RECOMMEND_IMAGES) errors.push(`素材图片至少 ${MIN_SEARCH_RECOMMEND_IMAGES} 张`);
   if (input.materialCount > MAX_SEARCH_RECOMMEND_IMAGES) errors.push(`素材图片最多 ${MAX_SEARCH_RECOMMEND_IMAGES} 张`);
   return errors.length ? errors.join('；') : 'ok';
@@ -187,12 +192,6 @@ function readRequest(key: string, api: string, data: Record<string, unknown>): R
   return { key, access: 'read', execution: 'not_executed_by_plan', api, method: 'POST', data };
 }
 
-function normalizeList(value: unknown): string[] {
-  return (Array.isArray(value) ? value : String(value || '').split(/[\n\r,，、;；]+/))
-    .map((item) => text(item))
-    .filter(Boolean);
-}
-
 function normalizeItemId(value: unknown): string {
   const match = text(value).match(/\d{8,}/);
   return match ? match[0] : '';
@@ -207,12 +206,7 @@ function normalizeCropRatio(value: unknown): string {
   return ['1:1', '3:4'].includes(raw) ? raw : '3:4';
 }
 
-function truncateText(value: unknown, maxLength: number): string {
-  return text(value).slice(0, maxLength);
-}
-
-function positiveInt(value: unknown, fallback: number, max: number): number {
+function intOrFallback(value: unknown, fallback: number): number {
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
-  return Math.min(parsed, max);
+  return Number.isInteger(parsed) ? parsed : fallback;
 }

@@ -32,6 +32,32 @@ export function text(value: unknown): string {
   return String(value).replace(/\s+/g, ' ').trim();
 }
 
+const LIST_SEPARATOR = /[\n\r,，、;；]+/;
+const LIST_CONTAINER_KEYS = ['paths', 'urls', 'files', 'images', 'items', 'values'];
+const LIST_VALUE_KEYS = ['path', 'url', 'fullUrl', 'imageUrl', 'src', 'href', 'filePath', 'itemCode', 'code', 'id'];
+
+export function normalizeTextList(value: unknown): string[] {
+  return listValues(value)
+    .map((item) => text(item))
+    .filter(Boolean);
+}
+
+function listValues(value: unknown): unknown[] {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value.flatMap((item) => listValues(item));
+  if (typeof value === 'string') return value.split(LIST_SEPARATOR);
+  if (typeof value !== 'object') return [value];
+
+  const record = value as Record<string, unknown>;
+  for (const key of LIST_CONTAINER_KEYS) {
+    if (record[key] != null) return listValues(record[key]);
+  }
+  for (const key of LIST_VALUE_KEYS) {
+    if (text(record[key])) return [record[key]];
+  }
+  return [];
+}
+
 export function num(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return Number(value);
