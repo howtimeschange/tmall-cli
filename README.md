@@ -32,6 +32,11 @@ npm run dev -- material-test plan-create --item-id 1060862679580 --material-urls
 npm run dev -- reviews parse-links 'https://detail.tmall.com/item.htm?id=1060862679580' -f json
 npm run dev -- reviews list --item-id 1060862679580 --page-size 2 --max-pages 1 -f json
 npm run dev -- member urls '左西旗舰店 123456789' -f json
+npm run dev -- detail status -f json
+npm run dev -- detail classify-packaging --style-code 208126156202 '/包/1-主图/tmall/208126156202_1440x1440_01.jpg' '/包/2-详情/images/208126156202_01.jpg' -f json
+npm run dev -- detail packaging-plan --style-code 208126156202 --item-id 1060862679580 --assets '/包/1-主图/tmall/208126156202_1440x1440_01.jpg,/包/2-详情/images/208126156202_01.jpg' -f json
+npm run dev -- detail upload-plan --file-name 208126156202_01.jpg -f json
+npm run dev -- detail operation-plan --item-id 1060862679580 --pc-detail-image-count 11 -f json
 npm run dev -- dmp compete-shops -f json
 npm run dev -- dmp compete-paid-probe --max-competitors 1 -f json
 ```
@@ -79,6 +84,7 @@ Why not PAGE_FETCH / INTERCEPT yet:
 | `material-test items/tasks/data/plan-create` | Query material-test item/task/data read APIs and build blocked create/upload plans. |
 | `reviews parse-links/list` | Parse item links locally and read buyer reviews with bounded pagination. |
 | `member urls` | Normalize member-center sellerId URLs locally; does not open pages. |
+| `detail status/classify-packaging/packaging-plan/upload-plan/operation-plan` | Read detail editor status and build blocked packaging/detail-edit request plans. |
 | `dmp compete-shops/compete-paid-probe/compete-paid-plan` | Resolve DMP competition shops and probe paid-analysis read APIs. |
 
 ## Implemented Adapter Coverage
@@ -91,6 +97,7 @@ All adapter commands are read-only and were validated against the logged-in `922
 - `material-test *`: converted from Crawshrimp `tmall-material-test*.js`: QianNiu item search, material-test task search, material-test data download/readback, and local blocked plans for create/add/online/upload request shapes.
 - `reviews *`: converted from Crawshrimp `buyer-reviews.js`: item-link parsing plus `mtop.taobao.rate.detaillist.get` with `rate.tmall.com/list_detail_rate.htm` fallback.
 - `member *`: converted safe local normalization from Crawshrimp `tmall-compete-member-monitor.js`; automatic navigation/screenshot capture is intentionally not enabled in this CLI.
+- `detail *`: converted safe planning pieces from Crawshrimp `tmall-packaging-upload.js`: packaging asset bucket classification, style-aware PC detail sequence dedupe, picture-space upload request shapes, Tmall publish-page component write shapes, new-detail commit shape, PC-to-mobile detail sync shape, and old mobile editor fallback labels/endpoints. All write steps are blocked.
 - `dmp compete-*`: converted from Crawshrimp `tmall-compete-paid-monitor.js`: competition shop resolution and paid-analysis read API probing. The probe summarizes endpoint health/shape instead of exporting full workbook data.
 - `ops *`: operation-class request shape catalog and static source lookup for submit/save/delete/upload/apply-like APIs. These commands document how operation requests are shaped, but `execution` remains `blocked`.
 
@@ -102,13 +109,68 @@ Inspected source folder: `/Users/xingyicheng/Documents/crawshrimp/adapters/tmall
 - `tmall-material-test-data-export.js` and `tmall-material-test.js` -> `material-test items`, `material-test tasks`, `material-test data`, `material-test plan-create`.
 - `tmall-compete-paid-monitor.js` -> `dmp compete-shops`, `dmp compete-paid-probe`, `dmp compete-paid-plan`.
 - `tmall-compete-member-monitor.js` -> `member urls`.
-- `tmall-packaging-upload.js` and `tmall-ai-image-test-chain.js` contain upload/publish/create orchestration; this CLI only records request shapes through plan/source commands and does not execute those operations.
+- `tmall-packaging-upload.js` -> `detail classify-packaging`, `detail packaging-plan`, `detail upload-plan`, `detail operation-plan`.
+- `tmall-ai-image-test-chain.js` contains upload/create/online orchestration; this CLI only records request shapes through plan/source commands and does not execute those operations.
+
+## Detail / Packaging CLI
+
+The packaging upload flow is generalized as a detail-page editing adapter. It is useful for preparing and auditing a real packaging run while preserving the production safety boundary.
+
+```bash
+# Read-only probe. Requires a sell.publish.tmall.com / sell.xiangqing.taobao.com editor tab to be open.
+node dist/cli.js detail status -f json
+
+# Local classification only. Paths and URLs may be separated by spaces, commas, or newlines.
+node dist/cli.js detail classify-packaging --style-code 208126156202 \
+  '/包/1-主图/tmall/208126156202_1440x1440_01.jpg' \
+  '/包/主图微详情/208126156202_1440x1920_01.jpg' \
+  '/包/商品竖图/208126156202_1440x2160.jpg' \
+  '/包/2-详情/images/208126156202_01.jpg' \
+  -f json
+
+# Build the full blocked plan: upload, publish-page component writes, PC detail, mobile detail sync, final submit.
+node dist/cli.js detail packaging-plan \
+  --style-code 208126156202 \
+  --item-id 1060862679580 \
+  --assets '/包/1-主图/tmall/208126156202_1440x1440_01.jpg,/包/2-详情/images/208126156202_01.jpg' \
+  --execute-mode publish_and_sync_mobile \
+  -f json
+
+# Inspect upload and operation request shapes separately.
+node dist/cli.js detail upload-plan --file-name 208126156202_01.jpg -f json
+node dist/cli.js detail operation-plan --item-id 1060862679580 --pc-detail-image-count 11 -f json
+```
+
+Supported packaging buckets:
+
+- `main_1x1`: 1:1 Tmall main image candidates, capped at 2 replacements.
+- `micro_1x1`: 1:1 micro-detail candidates, capped at 2.
+- `main_3x4`: 3:4 Tmall main image candidates, capped at 2 replacements.
+- `micro_3x4`: 3:4 micro-detail candidates, capped at 3.
+- `vertical`: product vertical image, capped at 1.
+- `pc_detail`: PC detail image sequence, default cap 30. Optimized detail packages are preferred, and duplicated style/template sequences keep the style-code-specific block.
+
+Blocked operation families emitted by `detail operation-plan`:
+
+- Picture-space upload: `POST https://stream-upload.taobao.com/api/upload.api`.
+- Publish-page model writes: `mainImagesGroup`, `threeToFourImages`, `guideImageGroup`, `descType`, `modularDesc`, `tmDescription`, `descRepublicOfSell`, `descForShenbiPc`, `descForShenbiMobile`.
+- PC-to-mobile API sync: `POST asyncOpt.htm?optType=wapDescAutoGen`.
+- Old mobile editor fallback: clear modules, `POST /template/convert.htm`, `POST /sell/ajax/save_item_template.do`, `POST /sell/ajax/commit.do`.
+- New detail commit: `POST https://xiangqing.wangpu.taobao.com/template/ajax/commit_item_description.do`.
+- Final publish submit: `POST submit.htm`.
+
+These commands intentionally never call those endpoints. They expose request shapes, component names, UI labels, and payload skeletons so an operator can audit the run plan before any future approved executor exists.
 
 Live smoke on the logged-in `9222` session:
 
 - `material-test tasks --item-id 1060862679580`: success, `total=0`.
 - `material-test items --keyword 1060862679580`: success, returned the Bala item title.
 - `material-test data --item-ids 1060862679580`: success, no detail rows for the sample item.
+- `detail classify-packaging`: success, categorized sample packaging paths into main, micro, vertical, and PC detail buckets.
+- `detail packaging-plan`: success, emitted blocked upload/detail/mobile/final-submit plan for item `1060862679580`.
+- `detail upload-plan`: success, emitted blocked picture-space upload request shape.
+- `detail operation-plan`: success, emitted blocked publish-page, mobile-sync, old-editor, new-desc, and final-submit operation plan.
+- `detail status`: requires an open detail publish/editor tab; if only seller home/DMP/Quick tabs are open, the command correctly reports that no matching editor target exists.
 - `dmp compete-shops`: success, resolved default competitor shops.
 - `dmp compete-paid-probe --max-competitors 1`: success across the paid-analysis read endpoints.
 

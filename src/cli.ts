@@ -3,6 +3,7 @@ import { realpathSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Command } from 'commander';
+import { buildDetailOperationPlan, buildDetailPackagingPlan, buildDetailUploadPlan, classifyPackagingAssetInputs, DETAIL_EDITOR_TARGET, readDetailEditorStatus } from './adapters/detail-editor.js';
 import { DMP_TARGET, readDmpAdcComponents, readDmpBrandApply, readDmpCredits, readDmpDatabankDeeplink, readDmpDeeplinkReportTasks, readDmpLatestDay, readDmpPowerUser, readDmpReportNotice, readDmpSms, readDmpSmsCount, readDmpUser, readDmpWaterprint, readDmpWeeklyReports } from './adapters/dmp.js';
 import { buildDmpCompetePaidPlan, readDmpCompetePaidProbe, readDmpCompeteShops } from './adapters/dmp-compete.js';
 import { buildMaterialCreatePlan, MATERIAL_TEST_TARGET, readMaterialData, readMaterialItems, readMaterialTasks } from './adapters/material-test.js';
@@ -421,6 +422,68 @@ export function createCli(): Command {
     .action((input) => {
       const opts = globals();
       write(normalizeMemberUrls((input || []).join('\n')), opts);
+    });
+
+  const detail = program.command('detail').description('天猫详情页编辑只读状态与 blocked 操作计划');
+  detail.command('status')
+    .description('读取当前详情发布/编辑页状态；不写表单、不点击')
+    .action(async () => {
+      const base = globals();
+      const opts = { ...base, target: base.target && base.target !== DEFAULT_TARGET_MATCH ? base.target : DETAIL_EDITOR_TARGET };
+      write(await readDetailEditorStatus({ cdpUrl: opts.cdpUrl, target: opts.target }), opts);
+    });
+  detail.command('classify-packaging')
+    .description('本地分类包装图素材到主图/微详情/竖图/PC详情桶')
+    .argument('[assets...]', 'asset URLs or paths')
+    .option('--style-code <code>', 'style code for PC detail sequence dedupe')
+    .option('--pc-detail-limit <n>', 'maximum PC detail images', '30')
+    .action((assets, cmdOpts) => {
+      const opts = globals();
+      write(classifyPackagingAssetInputs(splitList((assets || []).join('\n')), {
+        pcDetailLimit: normalizeLimit(cmdOpts.pcDetailLimit, 30, 200),
+        styleCode: cmdOpts.styleCode
+      }), opts);
+    });
+  detail.command('packaging-plan')
+    .description('生成包装上传/详情页编辑计划；只输出 blocked，不上传/保存/发布')
+    .option('--style-code <code>', 'style code')
+    .option('--item-id <id>', 'tmall item id')
+    .option('--assets <items>', 'comma/newline-separated asset URLs or paths')
+    .option('--pc-detail-limit <n>', 'maximum PC detail images', '30')
+    .option('--execute-mode <mode>', 'plan/upload_draft/publish_and_sync_mobile', 'plan')
+    .action((cmdOpts) => {
+      const opts = globals();
+      write(buildDetailPackagingPlan({
+        styleCode: cmdOpts.styleCode,
+        itemId: cmdOpts.itemId,
+        assets: splitList(cmdOpts.assets),
+        pcDetailLimit: normalizeLimit(cmdOpts.pcDetailLimit, 30, 200),
+        executeMode: cmdOpts.executeMode
+      }), opts);
+    });
+  detail.command('upload-plan')
+    .description('输出天猫图片空间上传请求计划；本地生成，不上传文件')
+    .option('--file-name <name>', 'sample file name', 'image.jpg')
+    .option('--folder-id <id>', 'picture-space folder id', '0')
+    .option('--origin-size', 'disable compression in plan')
+    .action((cmdOpts) => {
+      const opts = globals();
+      write(buildDetailUploadPlan({
+        fileName: cmdOpts.fileName,
+        folderId: cmdOpts.folderId,
+        originSize: Boolean(cmdOpts.originSize)
+      }), opts);
+    });
+  detail.command('operation-plan')
+    .description('输出详情页编辑/手机详情/提交发布操作接口计划；本地生成，不请求页面')
+    .option('--item-id <id>', 'tmall item id')
+    .option('--pc-detail-image-count <n>', 'PC detail image count', '0')
+    .action((cmdOpts) => {
+      const opts = globals();
+      write(buildDetailOperationPlan({
+        itemId: cmdOpts.itemId,
+        pcDetailImageCount: Number(cmdOpts.pcDetailImageCount)
+      }), opts);
     });
 
   const dmp = program.command('dmp').description('达摩盘真实只读页面接口');

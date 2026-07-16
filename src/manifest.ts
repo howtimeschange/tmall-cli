@@ -155,6 +155,39 @@ export const MANIFEST: ManifestEntry[] = [
     strategy: 'local',
     columns: ['shopName', 'sellerId', 'url', 'status']
   },
+  ...readCommand('detail.status', 'Read current Tmall detail editor/publish page status without writing fields', 'cdp-dom-state', ['title', 'href', 'isPublishEditor', 'ready']),
+  {
+    name: 'detail.classify-packaging',
+    description: 'Classify packaging assets locally into main image, micro-detail, vertical, and PC detail buckets',
+    access: 'read',
+    browser: false,
+    strategy: 'local',
+    columns: ['category', 'label', 'index', 'filename', 'ratio']
+  },
+  {
+    name: 'detail.packaging-plan',
+    description: 'Build blocked plan for packaging image upload and detail-page editing without executing online writes',
+    access: 'read',
+    browser: false,
+    strategy: 'local',
+    columns: ['access', 'execution', 'itemId', 'styleCode', 'executeMode']
+  },
+  {
+    name: 'detail.upload-plan',
+    description: 'Build blocked Tmall picture-space upload request plan without uploading files',
+    access: 'read',
+    browser: false,
+    strategy: 'local',
+    columns: ['access', 'execution', 'endpoint', 'method']
+  },
+  {
+    name: 'detail.operation-plan',
+    description: 'Build blocked detail-editor operation plan for component writes, mobile sync, new-desc commit, and submit',
+    access: 'read',
+    browser: false,
+    strategy: 'local',
+    columns: ['key', 'access', 'execution', 'endpoint', 'method']
+  },
   ...readCommand('dmp.snapshot', 'Read visible DMP page snapshot', 'cdp-dom-state', ['title', 'href', 'textHead']),
   ...readCommand('dmp.user', 'Read DMP login user and permission summary', 'page-get', ['siteName', 'serverDate', 'accountLevel', 'permissionCount']),
   ...readCommand('dmp.credits', 'Read DMP AI credit balance', 'page-get', ['balance', 'estimatedDays', 'totalConsumption']),
