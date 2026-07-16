@@ -188,6 +188,56 @@ export const MANIFEST: ManifestEntry[] = [
     strategy: 'local',
     columns: ['key', 'access', 'execution', 'endpoint', 'method']
   },
+  ...readCommand('video.template-catalog', 'Read Quick/QN img2video template catalog with slot summaries', 'mtop-read', ['templateId', 'name', 'type', 'ratio', 'requiredSlots']),
+  {
+    name: 'video.semir-material-plan',
+    description: 'Build local plan for Bala Semir cloud-drive video material preparation without downloading',
+    access: 'read',
+    browser: false,
+    strategy: 'local',
+    columns: ['access', 'execution', 'cloudPath', 'folderScanDepth', 'duplicateMode']
+  },
+  {
+    name: 'video.bala-image-plan',
+    description: 'Build blocked plan for Bala AI face/background/outfit/pose image generation and review handoff',
+    access: 'read',
+    browser: false,
+    strategy: 'local',
+    columns: ['access', 'execution', 'operationType', 'reviewMode', 'validation']
+  },
+  {
+    name: 'video.qn-img2video-plan',
+    description: 'Build blocked Quick/QN img2video upload and generation request plan',
+    access: 'read',
+    browser: false,
+    strategy: 'local',
+    columns: ['access', 'execution', 'target', 'itemId', 'ratio']
+  },
+  {
+    name: 'video.bala-workflow-plan',
+    description: 'Build blocked end-to-end Bala AI video workflow plan with mandatory review gate',
+    access: 'read',
+    browser: false,
+    strategy: 'local',
+    columns: ['access', 'execution', 'note']
+  },
+  ...readCommand('mop.template-catalog', 'Read MOP/Quick img2video template catalog with slot summaries', 'mtop-read', ['templateId', 'name', 'type', 'ratio', 'requiredSlots']),
+  {
+    name: 'mop.search-recommend-plan',
+    description: 'Build blocked MOP search-recommend material publish request plan',
+    access: 'read',
+    browser: false,
+    strategy: 'local',
+    columns: ['access', 'execution', 'itemId', 'merchantCode', 'validation']
+  },
+  {
+    name: 'mop.kol-img2video-plan',
+    description: 'Build blocked MOP KOL material img2video request plan',
+    access: 'read',
+    browser: false,
+    strategy: 'local',
+    columns: ['access', 'execution', 'itemId', 'merchantCode', 'validation']
+  },
   ...readCommand('dmp.snapshot', 'Read visible DMP page snapshot', 'cdp-dom-state', ['title', 'href', 'textHead']),
   ...readCommand('dmp.user', 'Read DMP login user and permission summary', 'page-get', ['siteName', 'serverDate', 'accountLevel', 'permissionCount']),
   ...readCommand('dmp.credits', 'Read DMP AI credit balance', 'page-get', ['balance', 'estimatedDays', 'totalConsumption']),

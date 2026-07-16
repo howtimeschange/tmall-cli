@@ -37,6 +37,11 @@ npm run dev -- detail classify-packaging --style-code 208126156202 '/包/1-主�
 npm run dev -- detail packaging-plan --style-code 208126156202 --item-id 1060862679580 --assets '/包/1-主图/tmall/208126156202_1440x1440_01.jpg,/包/2-详情/images/208126156202_01.jpg' -f json
 npm run dev -- detail upload-plan --file-name 208126156202_01.jpg -f json
 npm run dev -- detail operation-plan --item-id 1060862679580 --pc-detail-image-count 11 -f json
+npm run dev -- video template-catalog --main-category '童装/婴儿装/亲子装' -f table
+npm run dev -- video qn-img2video-plan --item-id 1060862679580 --image-urls https://img.alicdn.com/a.jpg --template-id tpl_001 -f json
+npm run dev -- video bala-workflow-plan 208326102205 --item-id 1060862679580 --image-urls https://img.alicdn.com/a.jpg -f json
+npm run dev -- mop search-recommend-plan --item-id 1060862679580 --title '新品上新' --description '童装穿搭素材' --material-urls https://img.alicdn.com/a.jpg,https://img.alicdn.com/b.jpg,https://img.alicdn.com/c.jpg -f json
+npm run dev -- mop kol-img2video-plan --merchant-code 46X096070266 --material-count 3 -f json
 npm run dev -- dmp compete-shops -f json
 npm run dev -- dmp compete-paid-probe --max-competitors 1 -f json
 ```
@@ -85,6 +90,8 @@ Why not PAGE_FETCH / INTERCEPT yet:
 | `reviews parse-links/list` | Parse item links locally and read buyer reviews with bounded pagination. |
 | `member urls` | Normalize member-center sellerId URLs locally; does not open pages. |
 | `detail status/classify-packaging/packaging-plan/upload-plan/operation-plan` | Read detail editor status and build blocked packaging/detail-edit request plans. |
+| `video template-catalog/semir-material-plan/bala-image-plan/qn-img2video-plan/bala-workflow-plan` | Integrate Bala AI video assistant planning and Quick img2video read/blocked surfaces. |
+| `mop template-catalog/search-recommend-plan/kol-img2video-plan` | Integrate MOP material/video scripts as read or blocked request plans. |
 | `dmp compete-shops/compete-paid-probe/compete-paid-plan` | Resolve DMP competition shops and probe paid-analysis read APIs. |
 
 ## Implemented Adapter Coverage
@@ -98,6 +105,8 @@ All adapter commands are read-only and were validated against the logged-in `922
 - `reviews *`: converted from Crawshrimp `buyer-reviews.js`: item-link parsing plus `mtop.taobao.rate.detaillist.get` with `rate.tmall.com/list_detail_rate.htm` fallback.
 - `member *`: converted safe local normalization from Crawshrimp `tmall-compete-member-monitor.js`; automatic navigation/screenshot capture is intentionally not enabled in this CLI.
 - `detail *`: converted safe planning pieces from Crawshrimp `tmall-packaging-upload.js`: packaging asset bucket classification, style-aware PC detail sequence dedupe, picture-space upload request shapes, Tmall publish-page component write shapes, new-detail commit shape, PC-to-mobile detail sync shape, and old mobile editor fallback labels/endpoints. All write steps are blocked.
+- `video *`: converted from Crawshrimp `bala-ai-video-assistant`: Semir material-prep planning, Bala AI image operation planning, mandatory review-gate workflow, Quick/QN template catalog readback, and blocked img2video upload/generation payloads.
+- `mop *`: converted from Crawshrimp `mop-ops-assistant`: MOP video template catalog readback, blocked search-recommend material publish payloads, and blocked KOL material img2video payloads.
 - `dmp compete-*`: converted from Crawshrimp `tmall-compete-paid-monitor.js`: competition shop resolution and paid-analysis read API probing. The probe summarizes endpoint health/shape instead of exporting full workbook data.
 - `ops *`: operation-class request shape catalog and static source lookup for submit/save/delete/upload/apply-like APIs. These commands document how operation requests are shaped, but `execution` remains `blocked`.
 
@@ -111,6 +120,12 @@ Inspected source folder: `/Users/xingyicheng/Documents/crawshrimp/adapters/tmall
 - `tmall-compete-member-monitor.js` -> `member urls`.
 - `tmall-packaging-upload.js` -> `detail classify-packaging`, `detail packaging-plan`, `detail upload-plan`, `detail operation-plan`.
 - `tmall-ai-image-test-chain.js` contains upload/create/online orchestration; this CLI only records request shapes through plan/source commands and does not execute those operations.
+- `bala-ai-video-assistant/semir-video-material-prepare.js` -> `video semir-material-plan`.
+- `bala-ai-video-assistant/bala-ai-face-background-generate.js` -> `video bala-image-plan`.
+- `bala-ai-video-assistant/qn-img2video-batch.js` -> `video template-catalog`, `video qn-img2video-plan`, `video bala-workflow-plan`.
+- `mop-ops-assistant/export-video-template-catalog.js` -> `mop template-catalog`.
+- `mop-ops-assistant/search-recommend-material-publish.js` -> `mop search-recommend-plan`.
+- `mop-ops-assistant/kol-material-img2video-batch.js` -> `mop kol-img2video-plan`.
 
 ## Detail / Packaging CLI
 
@@ -161,6 +176,50 @@ Blocked operation families emitted by `detail operation-plan`:
 
 These commands intentionally never call those endpoints. They expose request shapes, component names, UI labels, and payload skeletons so an operator can audit the run plan before any future approved executor exists.
 
+## Video / MOP CLI
+
+The Bala and MOP adapters share the Quick/QN img2video surface. Read APIs remain callable; upload/generate/publish APIs are represented as blocked plans.
+
+```bash
+# Read actual Quick/QN template catalog with slot summaries.
+node dist/cli.js video template-catalog --main-category '童装/婴儿装/亲子装' -f table
+node dist/cli.js mop template-catalog --main-category '童装/婴儿装/亲子装' -f table
+
+# Bala AI video workflow plans. The review gate is mandatory before video generation.
+node dist/cli.js video semir-material-plan 208326102205 208326105214 -f json
+node dist/cli.js video bala-image-plan --operation-type background_swap --source-images /tmp/a.jpg --background-prompt '海边' -f json
+node dist/cli.js video bala-workflow-plan 208326102205 --item-id 1060862679580 --image-urls https://img.alicdn.com/a.jpg -f json
+
+# Quick/QN img2video request shapes, shared by Bala and MOP scripts.
+node dist/cli.js video qn-img2video-plan \
+  --item-id 1060862679580 \
+  --image-urls https://img.alicdn.com/a.jpg \
+  --template-id tpl_001 \
+  --template-type auto \
+  -f json
+
+# MOP search-recommend and KOL video plans.
+node dist/cli.js mop search-recommend-plan \
+  --item-id 1060862679580 \
+  --title '新品上新' \
+  --description '童装穿搭素材' \
+  --material-urls https://img.alicdn.com/a.jpg,https://img.alicdn.com/b.jpg,https://img.alicdn.com/c.jpg \
+  -f json
+
+node dist/cli.js mop kol-img2video-plan --merchant-code 46X096070266 --material-count 3 -f json
+```
+
+Blocked operation families:
+
+- Quick/QN image upload helper: `window.$startFileUpload(dataUrl)`.
+- Direct img2video submit: `mtop.taobao.qn.copilot.image.generate.video.submit`.
+- Action-template img2video: `mtop.taobao.qn.copilot.img2video.template.video.generate`.
+- Slot-template video generation: `mtop.taobao.qn.copilot.video.template.generate`.
+- Video task polling is read-only in shape: `mtop.taobao.qn.copilot.quick.task.get`.
+- MOP search-recommend publish: `mtop.taobao.spongebob.item.material.publish`.
+- MOP publish config/session reads: `mtop.taobao.spongebob.item.material.publish.config`, `mtop.taobao.media.guang.session.generate`.
+- Merchant-code resolution reads: `mtop.tmall.sell.pc.manage.async` with `/tmall/manager/table.htm`.
+
 Live smoke on the logged-in `9222` session:
 
 - `material-test tasks --item-id 1060862679580`: success, `total=0`.
@@ -171,6 +230,10 @@ Live smoke on the logged-in `9222` session:
 - `detail upload-plan`: success, emitted blocked picture-space upload request shape.
 - `detail operation-plan`: success, emitted blocked publish-page, mobile-sync, old-editor, new-desc, and final-submit operation plan.
 - `detail status`: requires an open detail publish/editor tab; if only seller home/DMP/Quick tabs are open, the command correctly reports that no matching editor target exists.
+- `video qn-img2video-plan`: success, emitted blocked direct/template img2video request shapes.
+- `video bala-workflow-plan`: success, emitted Semir material plan, AI image plan, mandatory review gate, and blocked video plan.
+- `mop search-recommend-plan`: success, emitted blocked search-recommend material publish plan.
+- `mop kol-img2video-plan`: success, emitted blocked MOP KOL img2video plan.
 - `dmp compete-shops`: success, resolved default competitor shops.
 - `dmp compete-paid-probe --max-competitors 1`: success across the paid-analysis read endpoints.
 

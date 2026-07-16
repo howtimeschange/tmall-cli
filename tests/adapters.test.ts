@@ -3,7 +3,9 @@ import { buildDetailOperationPlan, buildDetailPackagingPlan, buildDetailUploadPl
 import { buildDmpCompetePaidPlan } from '../src/adapters/dmp-compete.js';
 import { buildMaterialCreatePlan, buildMaterialDataPayload, buildMaterialTaskSearchPayload } from '../src/adapters/material-test.js';
 import { normalizeMemberUrls } from '../src/adapters/member.js';
+import { buildMopKolImg2VideoPlan, buildMopSearchRecommendPlan } from '../src/adapters/mop.js';
 import { parseReviewLinks } from '../src/adapters/reviews.js';
+import { buildBalaImagePlan, buildBalaVideoWorkflowPlan, buildQnImg2VideoPlan, buildSemirVideoMaterialPlan } from '../src/adapters/video.js';
 
 describe('converted Crawshrimp adapter commands', () => {
   it('builds material-test read payloads and blocked write plans', () => {
@@ -113,5 +115,64 @@ describe('converted Crawshrimp adapter commands', () => {
     expect(JSON.stringify(plan.warnings)).toContain('PC详情候选检测到 2 段重复 3 张序列');
     expect(JSON.stringify(plan.uploadedByCategory)).toContain('208126156202_01.jpg');
     expect(JSON.stringify(plan.uploadedByCategory)).not.toContain('通用模板_01.jpg');
+  });
+
+  it('builds blocked Bala video workflow and QN img2video plans', () => {
+    const materialPlan = buildSemirVideoMaterialPlan({
+      itemCodes: ['208326102205'],
+      cloudPath: '巴拉营运BU-商品//巴拉货控/02 产品上新模块/2-2 巴拉产品上新/'
+    });
+    expect(materialPlan.execution).toBe('not_executed_by_cli');
+
+    const imagePlan = buildBalaImagePlan({
+      operationType: 'background_swap',
+      backgroundPrompt: '海边',
+      sourceImages: ['/tmp/source.jpg']
+    });
+    expect(imagePlan.execution).toBe('blocked');
+    expect(imagePlan.validation).toBe('ok');
+
+    const videoPlan = buildQnImg2VideoPlan({
+      itemId: '1060862679580',
+      imageUrls: ['https://img.alicdn.com/a.jpg'],
+      templateId: 'tpl-1'
+    });
+    expect(videoPlan.execution).toBe('blocked');
+    expect(JSON.stringify(videoPlan)).toContain('mtop.taobao.qn.copilot.image.generate.video.submit');
+    expect(JSON.stringify(videoPlan)).toContain('mtop.taobao.qn.copilot.img2video.template.video.generate');
+    expect(JSON.stringify(videoPlan)).toContain('mtop.taobao.qn.copilot.quick.task.get');
+
+    const workflow = buildBalaVideoWorkflowPlan({
+      itemCodes: ['208326102205'],
+      itemId: '1060862679580',
+      imageUrls: ['https://img.alicdn.com/a.jpg']
+    });
+    expect(JSON.stringify(workflow)).toContain('review_gate');
+    expect(JSON.stringify(workflow)).toContain('approved/rejected/retry/exported-to-video');
+  });
+
+  it('builds blocked MOP search-recommend and KOL img2video plans', () => {
+    const publishPlan = buildMopSearchRecommendPlan({
+      itemId: '1060862679580',
+      title: '标题',
+      description: '内容描述',
+      materialUrls: [
+        'https://img.alicdn.com/a.jpg',
+        'https://img.alicdn.com/b.jpg',
+        'https://img.alicdn.com/c.jpg'
+      ]
+    });
+    expect(publishPlan.execution).toBe('blocked');
+    expect(publishPlan.validation).toBe('ok');
+    expect(JSON.stringify(publishPlan)).toContain('mtop.taobao.spongebob.item.material.publish');
+
+    const kolPlan = buildMopKolImg2VideoPlan({
+      merchantCode: '46X096070266',
+      materialCount: 3
+    });
+    expect(kolPlan.execution).toBe('blocked');
+    expect(kolPlan.validation).toBe('ok');
+    expect(JSON.stringify(kolPlan)).toContain('mtop.taobao.qn.copilot.image.generate.video.submit');
+    expect(JSON.stringify(kolPlan)).toContain('mtop.tmall.sell.pc.manage.async');
   });
 });

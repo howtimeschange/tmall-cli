@@ -8,9 +8,11 @@ import { DMP_TARGET, readDmpAdcComponents, readDmpBrandApply, readDmpCredits, re
 import { buildDmpCompetePaidPlan, readDmpCompetePaidProbe, readDmpCompeteShops } from './adapters/dmp-compete.js';
 import { buildMaterialCreatePlan, MATERIAL_TEST_TARGET, readMaterialData, readMaterialItems, readMaterialTasks } from './adapters/material-test.js';
 import { normalizeMemberUrls } from './adapters/member.js';
+import { buildMopKolImg2VideoPlan, buildMopSearchRecommendPlan, readMopVideoTemplateCatalog } from './adapters/mop.js';
 import { QUICK_VIDEO_TARGET, readAgreement, readCommercializeCheck, readDesktopDownload, readDigitalHumans, readItemPool, readItemSearch, readLayoutMenu, readOfflineResults, readOneConfigure, readPreference, readQuickPoints, readQuickSellerCategory, readRecommendItems, readScriptCategories, readSignStatus, readSwitches, readTemplateCategories, readTemplates } from './adapters/quick-video.js';
 import { parseReviewLinks, readReviews, REVIEWS_TARGET } from './adapters/reviews.js';
 import { SELLER_HOME_TARGET, readActivities, readCalendar, readDiagnoseOverview, readFinanceHome, readHomeAdvertisements, readHomeNumbers, readHomePopups, readHomeTodo, readNoticeAll, readRiskComponents, readSellerCard, readSellerInfoCards, readServiceStatus, readShopInfo, readShopTags, readSopTasks, readWarnInfo } from './adapters/seller-home.js';
+import { buildBalaImagePlan, buildBalaVideoWorkflowPlan, buildQnImg2VideoPlan, buildSemirVideoMaterialPlan, readVideoTemplateCatalog } from './adapters/video.js';
 import { DEFAULT_CDP_URL, DEFAULT_HOME_URL, DEFAULT_TARGET_MATCH, listTargets, selectTarget, withTmallPage } from './cdp.js';
 import { AuthRequiredError, TmallCliError, toTmallError } from './errors.js';
 import { endpointExpression, type EndpointSummary, menuExpression, type MenuSnapshot, snapshotExpression, type PageSnapshot } from './extractors.js';
@@ -483,6 +485,180 @@ export function createCli(): Command {
       write(buildDetailOperationPlan({
         itemId: cmdOpts.itemId,
         pcDetailImageCount: Number(cmdOpts.pcDetailImageCount)
+      }), opts);
+    });
+
+  const video = program.command('video').description('巴拉 AI 视频助手 / 生意管家图生视频接口计划');
+  video.command('template-catalog')
+    .description('读取生意管家图生视频模板目录，对应 MOP/巴拉模板导出脚本')
+    .option('--main-category <name>', 'main category, e.g. 童装/婴儿装/亲子装')
+    .option('-l, --limit <n>', 'maximum rows', '200')
+    .action(async (cmdOpts) => {
+      const opts = { ...globals(), target: QUICK_VIDEO_TARGET };
+      write(await readVideoTemplateCatalog({
+        cdpUrl: opts.cdpUrl,
+        target: opts.target,
+        mainCategory: cmdOpts.mainCategory,
+        limit: normalizeLimit(cmdOpts.limit, 200, 1000)
+      }), opts);
+    });
+  video.command('semir-material-plan')
+    .description('生成巴拉视频素材准备计划；不连接云盘、不下载')
+    .argument('[itemCodes...]', 'style/item codes')
+    .option('--cloud-path <path>', 'Semir cloud-drive root path')
+    .option('--folder-scan-depth <n>', 'folder scan depth', '2')
+    .option('--duplicate-mode <mode>', 'first_per_hash/all', 'first_per_hash')
+    .option('--package-name <name>', 'local package name')
+    .action((itemCodes, cmdOpts) => {
+      const opts = globals();
+      write(buildSemirVideoMaterialPlan({
+        itemCodes: splitList((itemCodes || []).join('\n')),
+        cloudPath: cmdOpts.cloudPath,
+        folderScanDepth: normalizeLimit(cmdOpts.folderScanDepth, 2, 8),
+        duplicateMode: cmdOpts.duplicateMode,
+        packageName: cmdOpts.packageName
+      }), opts);
+    });
+  video.command('bala-image-plan')
+    .description('生成巴拉 AI 换脸/换背景/换装/换姿势任务计划；不创建 AI 任务')
+    .option('--operation-type <type>', 'face_swap/background_swap/outfit_swap/pose_swap', 'face_swap')
+    .option('--source-images <items>', 'comma/newline-separated local images')
+    .option('--material-root <path>', 'material root directory')
+    .option('--model-groups <items>', 'comma/newline-separated model groups')
+    .option('--model-ref-ids <items>', 'comma/newline-separated model ref ids')
+    .option('--background-prompt <text>', 'background prompt')
+    .option('--garment-images <items>', 'outfit garment images')
+    .option('--outfit-reference-images <items>', 'outfit reference images')
+    .option('--variant-reference-images <items>', 'variant reference images')
+    .option('--pose-prompt <text>', 'pose prompt')
+    .option('--prompt-extra <text>', 'extra prompt requirements')
+    .option('--generation-mode <mode>', 'submit_async/create_only', 'submit_async')
+    .option('--review-mode <mode>', 'create_review_batch/none', 'create_review_batch')
+    .action((cmdOpts) => {
+      const opts = globals();
+      write(buildBalaImagePlan({
+        operationType: cmdOpts.operationType,
+        sourceImages: splitList(cmdOpts.sourceImages),
+        materialRoot: cmdOpts.materialRoot,
+        modelGroups: splitList(cmdOpts.modelGroups),
+        modelRefIds: splitList(cmdOpts.modelRefIds),
+        backgroundPrompt: cmdOpts.backgroundPrompt,
+        garmentImages: splitList(cmdOpts.garmentImages),
+        outfitReferenceImages: splitList(cmdOpts.outfitReferenceImages),
+        variantReferenceImages: splitList(cmdOpts.variantReferenceImages),
+        posePrompt: cmdOpts.posePrompt,
+        promptExtra: cmdOpts.promptExtra,
+        generationMode: cmdOpts.generationMode,
+        reviewMode: cmdOpts.reviewMode
+      }), opts);
+    });
+  video.command('qn-img2video-plan')
+    .description('生成千牛/生意管家图生视频请求计划；不上传、不提交、不轮询')
+    .option('--item-id <id>', 'item id')
+    .option('--image-urls <items>', 'comma/newline-separated remote image URLs')
+    .option('--image-count <n>', 'local image count placeholder', '1')
+    .option('--ratio <ratio>', '1:1/3:4/9:16/16:9', '3:4')
+    .option('--prompt <text>', 'video prompt')
+    .option('--main-category <name>', 'main category', '童装/婴儿装/亲子装')
+    .option('--template-id <id>', 'template id')
+    .option('--template-type <type>', 'auto/action/slot', 'auto')
+    .option('--provider <provider>', 'template provider', 'content')
+    .option('--group-mode <mode>', 'one_image_per_video/all_images_one_video', 'one_image_per_video')
+    .action((cmdOpts) => {
+      const opts = globals();
+      write(buildQnImg2VideoPlan({
+        itemId: cmdOpts.itemId,
+        imageUrls: splitList(cmdOpts.imageUrls),
+        imageCount: normalizeLimit(cmdOpts.imageCount, 1, 200),
+        ratio: cmdOpts.ratio,
+        prompt: cmdOpts.prompt,
+        mainCategory: cmdOpts.mainCategory,
+        templateId: cmdOpts.templateId,
+        templateType: cmdOpts.templateType,
+        provider: cmdOpts.provider,
+        groupMode: cmdOpts.groupMode
+      }), opts);
+    });
+  video.command('bala-workflow-plan')
+    .description('生成巴拉 AI 视频完整链路计划；保留审核闸口，不执行生成')
+    .argument('[itemCodes...]', 'style/item codes')
+    .option('--item-id <id>', 'tmall item id')
+    .option('--image-urls <items>', 'approved remote image URLs')
+    .option('--operation-type <type>', 'face_swap/background_swap/outfit_swap/pose_swap', 'face_swap')
+    .option('--model-groups <items>', 'model groups', '100女')
+    .option('--main-category <name>', 'main category', '童装/婴儿装/亲子装')
+    .option('--template-id <id>', 'template id')
+    .action((itemCodes, cmdOpts) => {
+      const opts = globals();
+      write(buildBalaVideoWorkflowPlan({
+        itemCodes: splitList((itemCodes || []).join('\n')),
+        itemId: cmdOpts.itemId,
+        imageUrls: splitList(cmdOpts.imageUrls),
+        operationType: cmdOpts.operationType,
+        modelGroups: splitList(cmdOpts.modelGroups),
+        mainCategory: cmdOpts.mainCategory,
+        templateId: cmdOpts.templateId
+      }), opts);
+    });
+
+  const mop = program.command('mop').description('MOP 运营助手里的千牛/天猫素材与视频命令');
+  mop.command('template-catalog')
+    .description('读取 MOP 视频模板目录，对应 export-video-template-catalog.js')
+    .option('--main-category <name>', 'main category')
+    .option('-l, --limit <n>', 'maximum rows', '200')
+    .action(async (cmdOpts) => {
+      const opts = { ...globals(), target: QUICK_VIDEO_TARGET };
+      write(await readMopVideoTemplateCatalog({
+        cdpUrl: opts.cdpUrl,
+        target: opts.target,
+        mainCategory: cmdOpts.mainCategory,
+        limit: normalizeLimit(cmdOpts.limit, 200, 1000)
+      }), opts);
+    });
+  mop.command('search-recommend-plan')
+    .description('生成 MOP 搜推图文素材发布计划；不上传、不发布')
+    .option('--item-id <id>', 'item id')
+    .option('--merchant-code <code>', 'merchant/outer code')
+    .option('--title <text>', 'short title')
+    .option('--description <text>', 'content description')
+    .option('--material-urls <items>', 'comma/newline-separated image URLs')
+    .option('--material-count <n>', 'image count placeholder', '3')
+    .option('--crop-ratio <ratio>', '1:1/3:4', '3:4')
+    .option('--influencer <name>', '达人')
+    .action((cmdOpts) => {
+      const opts = globals();
+      write(buildMopSearchRecommendPlan({
+        itemId: cmdOpts.itemId,
+        merchantCode: cmdOpts.merchantCode,
+        title: cmdOpts.title,
+        description: cmdOpts.description,
+        materialUrls: splitList(cmdOpts.materialUrls),
+        materialCount: normalizeLimit(cmdOpts.materialCount, 3, 9),
+        cropRatio: cmdOpts.cropRatio,
+        influencer: cmdOpts.influencer
+      }), opts);
+    });
+  mop.command('kol-img2video-plan')
+    .description('生成 MOP KOL 素材转短视频计划；不上传、不提交生成')
+    .option('--item-id <id>', 'item id')
+    .option('--merchant-code <code>', 'merchant/outer code')
+    .option('--image-urls <items>', 'comma/newline-separated remote image URLs')
+    .option('--material-count <n>', 'image count placeholder', '3')
+    .option('--ratio <ratio>', '1:1/3:4/9:16/16:9', '3:4')
+    .option('--prompt <text>', 'video prompt')
+    .option('--main-category <name>', 'main category', '童装/婴儿装/亲子装')
+    .option('--use-item-pics-fallback', 'plan item-picture fallback when no material image is available')
+    .action((cmdOpts) => {
+      const opts = globals();
+      write(buildMopKolImg2VideoPlan({
+        itemId: cmdOpts.itemId,
+        merchantCode: cmdOpts.merchantCode,
+        imageUrls: splitList(cmdOpts.imageUrls),
+        materialCount: normalizeLimit(cmdOpts.materialCount, 3, 12),
+        ratio: cmdOpts.ratio,
+        prompt: cmdOpts.prompt,
+        mainCategory: cmdOpts.mainCategory,
+        useItemPicsFallback: Boolean(cmdOpts.useItemPicsFallback)
       }), opts);
     });
 
