@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.DS_Store
+coverage/
+*.log
+docs/recon/*.local.json
+docs/recon/*.local.md
