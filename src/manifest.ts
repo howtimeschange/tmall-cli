@@ -261,6 +261,22 @@ export const MANIFEST: ManifestEntry[] = [
     browser: false,
     strategy: 'local',
     columns: ['path', 'method', 'origin', 'execution']
+  },
+  {
+    name: 'executor.commands',
+    description: 'List exact blocked-write plan commands accepted by the separate executor',
+    access: 'read',
+    browser: false,
+    strategy: 'local',
+    columns: ['command', 'target', 'supportedRunners', 'rollback']
+  },
+  {
+    name: 'executor.plan',
+    description: 'Dry-run or explicitly execute a saved blocked-write plan with whitelist, second confirmation, audit log, and rollback/failure gates',
+    access: 'blocked-write',
+    browser: true,
+    strategy: 'local',
+    columns: ['mode', 'command', 'planHash', 'exactConfirmation', 'refusalReasons', 'auditLog']
   }
 ];
 

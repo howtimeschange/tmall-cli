@@ -7,8 +7,9 @@
 - 默认只读：不点击提交、保存、发布、删除、退款、报名、上传等线上写操作。
 - 不读取或落盘 cookies、localStorage 值、密码、token、签名、原始带签 URL。
 - 已加载 MTOP/H5 接口只输出 API 名、版本、data 字段形状和风险分类。
-- 命中 `save/update/delete/create/submit/commit/operate` 等动词的接口会标记为 `write_or_mutation_risk`，当前不提供执行入口。
-- `menu export` 和 `recon export` 只写本地文件。
+- 命中 `save/update/delete/create/submit/commit/operate` 等动词的接口会标记为 `write_or_mutation_risk`。计划命令本身永远不执行；只有独立 `executor plan` 可以接管 saved plan。
+- `executor plan` 默认 dry-run，只输出 diff 和安全门状态。真实执行必须同时满足 `--execute`、精确 `--allow-command`、dry-run 给出的 `--confirm`、`--allow-irreversible`、无 `<placeholder>` 参数、命令/step runner 支持，并写本地审计日志。
+- `menu export`、`recon export` 和 `executor plan` 审计日志只写本地文件。
 
 ## Quick Start
 
@@ -44,6 +45,11 @@ npm run dev -- mop search-recommend-plan --item-id 1060862679580 --title '新品
 npm run dev -- mop kol-img2video-plan --merchant-code 46X096070266 --material-count 3 -f json
 npm run dev -- dmp compete-shops -f json
 npm run dev -- dmp compete-paid-probe --max-competitors 1 -f json
+
+# 独立 executor：默认 dry-run，不触发线上写操作。
+npm run dev -- executor commands -f table
+npm run dev -- mop search-recommend-plan --item-id 1060862679580 --title '新品上新' --description '童装穿搭素材' --material-urls https://img.alicdn.com/a.jpg,https://img.alicdn.com/b.jpg,https://img.alicdn.com/c.jpg -f json > /tmp/mop-plan.json
+npm run dev -- executor plan --command mop.search-recommend-plan --plan-file /tmp/mop-plan.json -f json
 ```
 
 也可以直接运行构建产物：
@@ -93,6 +99,7 @@ Why not PAGE_FETCH / INTERCEPT yet:
 | `video template-catalog/semir-material-plan/bala-image-plan/qn-img2video-plan/bala-workflow-plan` | Integrate Bala AI video assistant planning and Quick img2video read/blocked surfaces. |
 | `mop template-catalog/search-recommend-plan/kol-img2video-plan` | Integrate MOP material/video scripts as read or blocked request plans. |
 | `dmp compete-shops/compete-paid-probe/compete-paid-plan` | Resolve DMP competition shops and probe paid-analysis read APIs. |
+| `executor commands/plan` | Inspect or explicitly execute saved blocked-write plans behind whitelist, confirmation, rollback, and audit gates. |
 
 ## Implemented Adapter Coverage
 
@@ -109,6 +116,57 @@ All adapter commands are read-only and were validated against the logged-in `922
 - `mop *`: converted from Crawshrimp `mop-ops-assistant`: MOP video template catalog readback, blocked search-recommend material publish payloads, and blocked KOL material img2video payloads.
 - `dmp compete-*`: converted from Crawshrimp `tmall-compete-paid-monitor.js`: competition shop resolution and paid-analysis read API probing. The probe summarizes endpoint health/shape instead of exporting full workbook data.
 - `ops *`: operation-class request shape catalog and static source lookup for submit/save/delete/upload/apply-like APIs. These commands document how operation requests are shaped, but `execution` remains `blocked`.
+- `executor *`: separate execution layer for saved blocked-write plans. It can inspect every blocked-write plan, writes an audit log for dry-run/refused/executed attempts, and only MTOP-family steps with complete parameters currently have an online runner. Upload helpers, DOM/page-model operations, external AI-job creation, and multipart upload flows are refused until a dedicated runner and recovery story exists.
+
+## Blocked-Write Executor
+
+The plan commands remain safe by construction: they only emit JSON. To move from a plan to an attempted online write, save the plan and pass it to the separate executor.
+
+```bash
+# 1. Generate a plan. This does not write online data.
+node dist/cli.js material-test plan-create \
+  --item-id 1060862679580 \
+  --material-urls https://img.alicdn.com/a.jpg \
+  -f json > /tmp/material-plan.json
+
+# 2. Dry-run through the executor. This writes only a local audit log and prints exactConfirmation.
+node dist/cli.js executor plan \
+  --command material-test.plan-create \
+  --plan-file /tmp/material-plan.json \
+  --log-dir .tmall-cli/audit \
+  -f json
+
+# 3. If, and only if, the dry-run is acceptable, request execution for exact step(s).
+# This will still refuse if parameters contain placeholders, a runner is missing, or validation failed.
+node dist/cli.js executor plan \
+  --command material-test.plan-create \
+  --plan-file /tmp/material-plan.json \
+  --execute \
+  --allow-command material-test.plan-create \
+  --allow-step create \
+  --allow-irreversible \
+  --confirm 'EXECUTE material-test.plan-create <hash-from-dry-run>' \
+  --log-dir .tmall-cli/audit \
+  -f json
+```
+
+Executor gates:
+
+- `--execute` is required for any online request. Without it, mode is always `dry-run`.
+- `--allow-command` must exactly match the plan command. It may also be provided through `TMALL_EXECUTOR_ALLOWLIST`.
+- `--confirm` must exactly match the dry-run `exactConfirmation` string, which includes the plan hash.
+- `--allow-step` can narrow execution to exact step ids or keys. Without it, every extracted blocked-write step is selected.
+- `--allow-irreversible` is required because the current Tmall/QN write surfaces do not have a generic automatic rollback.
+- Plans with `validation` other than `ok`, `<placeholder>` values, unsupported step families, missing runners, or unknown commands are refused before any page request.
+- Every dry-run, refusal, success, or failure writes a redacted JSON audit log. CLI output keeps business parameters visible for operator review; logs redact IDs, tokens, signed URLs, and sensitive keys.
+
+Supported online runner today:
+
+- `mtop`: executes through the logged-in 9222 browser page via `window.lib.mtop` / `window.mtop`.
+
+Refused until dedicated runners exist:
+
+- `http-upload`, `mtop-upload`, `upload-helper`, `page-model`, `dom`, and `external-system`.
 
 ## Crawshrimp Conversion Notes
 
@@ -174,7 +232,7 @@ Blocked operation families emitted by `detail operation-plan`:
 - New detail commit: `POST https://xiangqing.wangpu.taobao.com/template/ajax/commit_item_description.do`.
 - Final publish submit: `POST submit.htm`.
 
-These commands intentionally never call those endpoints. They expose request shapes, component names, UI labels, and payload skeletons so an operator can audit the run plan before any future approved executor exists.
+These plan commands intentionally never call those endpoints. They expose request shapes, component names, UI labels, and payload skeletons so an operator can audit the run plan. If a saved detail plan is passed to `executor plan`, unsupported upload, DOM, and page-model steps are refused unless a dedicated runner is later implemented.
 
 ## Video / MOP CLI
 
